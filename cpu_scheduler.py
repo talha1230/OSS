@@ -61,77 +61,82 @@ class CPUScheduler:
         self.processes.append(Process(pid, arrival_time, burst_time, priority))
 
     def round_robin(self):
+        """Round Robin scheduling with fixed quantum=3"""
         self.check_minimum_processes()
         time = 0
         queue = []
         gantt_chart = []
+        time_chart = []  # Track execution times
         completed_processes = 0
-        n = len(self.processes)
-
-        while completed_processes < n:
+        
+        while completed_processes < len(self.processes):
+            # Add newly arrived processes to queue
             for process in self.processes:
-                if process.arrival_time <= time and process.remaining_time > 0 and process not in queue:
+                if (process.arrival_time <= time and 
+                    process.remaining_time > 0 and 
+                    process not in queue):
                     queue.append(process)
-
+            
             if queue:
                 current_process = queue.pop(0)
+                execution_time = min(self.time_quantum, current_process.remaining_time)
+                
+                # Record execution period
                 gantt_chart.append(current_process.pid)
-
-                if current_process.remaining_time > self.time_quantum:
-                    time += self.time_quantum
-                    current_process.remaining_time -= self.time_quantum
-                else:
-                    time += current_process.remaining_time
-                    current_process.waiting_time = time - current_process.arrival_time - current_process.burst_time
+                time_chart.append((time, time + execution_time))
+                current_process.update_state("running", time)
+                
+                time += execution_time
+                current_process.remaining_time -= execution_time
+                
+                if current_process.remaining_time == 0:
+                    current_process.update_state("completed", time)
+                    current_process.completion_time = time
                     current_process.turnaround_time = time - current_process.arrival_time
-                    current_process.remaining_time = 0
+                    current_process.waiting_time = current_process.turnaround_time - current_process.burst_time
                     completed_processes += 1
-                queue.append(current_process)
+                else:
+                    queue.append(current_process)
+                    current_process.update_state("ready", time)
             else:
                 time += 1
-
-        return gantt_chart
+        
+        return gantt_chart, time_chart
 
     def sjf_nonpreemptive(self):
-        """Non-preemptive SJF with FCFS tiebreaker"""
+        """Non-preemptive SJF with improved timing"""
         self.check_minimum_processes()
         time = 0
         completed_processes = 0
         gantt_chart = []
+        time_chart = []
         remaining_processes = self.processes.copy()
 
         while completed_processes < len(self.processes):
-            ready_processes = [p for p in remaining_processes if p.arrival_time <= time]
+            ready_processes = [p for p in remaining_processes 
+                             if p.arrival_time <= time]
             if not ready_processes:
                 time += 1
                 continue
 
-            # Break ties using arrival time first, then PID
             current_process = min(ready_processes, 
                                 key=lambda p: (p.burst_time, p.arrival_time, p.pid))
             
-            # Update state with timestamp
-            current_process.update_state("running", time)
-            
-            if current_process.response_time == -1:
-                current_process.response_time = time - current_process.arrival_time
-
             gantt_chart.append(current_process.pid)
+            start_time = time
             time += current_process.burst_time
+            time_chart.append((start_time, time))
+            
+            current_process.update_state("running", start_time)
+            current_process.update_state("completed", time)
             current_process.completion_time = time
             current_process.turnaround_time = time - current_process.arrival_time
             current_process.waiting_time = current_process.turnaround_time - current_process.burst_time
             
-            current_process.update_state("completed", time)
             completed_processes += 1
             remaining_processes.remove(current_process)
 
-            # Update waiting processes states
-            for p in remaining_processes:
-                if p.arrival_time <= time:
-                    p.update_state("ready", time)
-
-        return gantt_chart
+        return gantt_chart, time_chart
 
     def sjf_preemptive(self):
         """Preemptive Shortest Job First scheduling.
@@ -166,44 +171,49 @@ class CPUScheduler:
         return gantt_chart
 
     def priority_scheduling(self, preemptive=False):
-        """Priority-based scheduling with optional preemption.
-        Ties are broken by giving preference to the process with lower PID."""
+        """Priority scheduling with improved timing"""
         time = 0
         completed_processes = 0
         gantt_chart = []
+        time_chart = []
+        last_switch = 0
         
         while completed_processes < len(self.processes):
-            ready_processes = [p for p in self.processes if p.arrival_time <= time and p.remaining_time > 0]
+            ready_processes = [p for p in self.processes 
+                             if p.arrival_time <= time and p.remaining_time > 0]
             if not ready_processes:
                 time += 1
                 continue
 
-            # Break ties using process ID
-            current_process = min(ready_processes, key=lambda p: (p.priority, p.pid))
-            current_process.state = "running"
-            if current_process.response_time == -1:
-                current_process.response_time = time - current_process.arrival_time
-
-            gantt_chart.append(current_process.pid)
+            current_process = min(ready_processes, 
+                                key=lambda p: (p.priority, p.pid))
             
+            if not gantt_chart or gantt_chart[-1] != current_process.pid:
+                if gantt_chart:  # Record previous execution period
+                    time_chart.append((last_switch, time))
+                gantt_chart.append(current_process.pid)
+                last_switch = time
+                
             if preemptive:
                 time += 1
                 current_process.remaining_time -= 1
             else:
-                time += current_process.remaining_time
+                exec_time = current_process.remaining_time
+                time += exec_time
                 current_process.remaining_time = 0
 
             if current_process.remaining_time == 0:
+                time_chart.append((last_switch, time))
                 current_process.completion_time = time
                 current_process.turnaround_time = time - current_process.arrival_time
                 current_process.waiting_time = current_process.turnaround_time - current_process.burst_time
-                current_process.state = "completed"
                 completed_processes += 1
 
-        return gantt_chart
+        return gantt_chart, time_chart
 
-    def display_gantt_chart(self, gantt_chart):
-        """Display formatted Gantt chart"""
+    def display_gantt_chart(self, gantt_data):
+        """Display enhanced Gantt chart with accurate timings"""
+        gantt_chart, time_chart = gantt_data
         print("\nGantt Chart:")
         
         # Print top border
@@ -218,14 +228,11 @@ class CPUScheduler:
         # Print bottom border
         print("╚" + "══════╩" * (len(gantt_chart)-1) + "══════╝")
         
-        # Print timeline
-        print("0     ", end="")
-        time = 0
-        for p in gantt_chart:
-            process = next(p for p in self.processes if p.pid == p)
-            time += 1  # Assuming unit time slots
-            print(f"{time:<6}", end="")
-        print()
+        # Print timeline with actual times
+        print(" ", end="")
+        for start, end in time_chart:
+            print(f"{start:<6}", end="")
+        print(f"{time_chart[-1][1]}")  # Print final time
 
     def display_statistics(self):
         total_waiting_time = 0

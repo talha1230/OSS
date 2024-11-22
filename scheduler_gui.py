@@ -240,49 +240,54 @@ Statistics:
             y += 30
     
     def draw_gantt_chart(self):
-        """Enhanced real-time Gantt chart visualization"""
+        """Enhanced Gantt chart with accurate timings"""
         self.state_canvas.delete("gantt")
         x = 50
         y = 40
         cell_width = 40
         cell_height = 30
         
-        # Draw timeline grid
-        for i in range(15):
-            self.state_canvas.create_line(x + i*cell_width, y, 
-                                        x + i*cell_width, y + len(self.scheduler.processes)*cell_height,
-                                        fill="gray", dash=(2,2), tags="gantt")
-            self.state_canvas.create_text(x + i*cell_width, y - 15, 
-                                        text=str(i), tags="gantt")
+        # Get timing data
+        gantt_chart, time_chart = self.current_gantt_data
+        max_time = time_chart[-1][1]
         
-        # Draw process execution blocks
+        # Draw timeline grid
+        for i in range(max_time + 1):
+            grid_x = x + (i * cell_width)
+            self.state_canvas.create_line(
+                grid_x, y,
+                grid_x, y + len(self.scheduler.processes)*cell_height,
+                fill="gray", dash=(2,2), tags="gantt"
+            )
+            self.state_canvas.create_text(
+                grid_x, y - 15,
+                text=str(i), tags="gantt"
+            )
+        
+        # Draw process executions
         colors = ["#FFB6C1", "#98FB98", "#87CEFA", "#DDA0DD", "#F0E68C"]
-        for i, p in enumerate(self.scheduler.processes):
-            # Process label
-            self.state_canvas.create_text(30, y + i*cell_height + cell_height/2,
-                                        text=f"P{p.pid}", tags="gantt")
+        for i, (pid, (start, end)) in enumerate(zip(gantt_chart, time_chart)):
+            process = next(p for p in self.scheduler.processes if p.pid == pid)
+            color = colors[process.pid % len(colors)]
             
-            # Draw execution blocks from history
-            last_x = x
-            for time, state in p.state_history:
-                if state == "running":
-                    self.state_canvas.create_rectangle(
-                        x + time*cell_width, y + i*cell_height,
-                        x + (time+1)*cell_width, y + (i+1)*cell_height,
-                        fill=colors[p.pid % len(colors)],
-                        outline="black",
-                        tags="gantt"
-                    )
-                last_x = x + (time+1)*cell_width
+            # Draw execution block
+            block_x1 = x + (start * cell_width)
+            block_x2 = x + (end * cell_width)
+            block_y = y + (process.pid-1)*cell_height
             
-            # Show remaining time
-            if p.remaining_time > 0:
-                self.state_canvas.create_text(
-                    last_x + 20, y + i*cell_height + cell_height/2,
-                    text=f"Remaining: {p.remaining_time}",
-                    tags="gantt"
-                )
-    
+            self.state_canvas.create_rectangle(
+                block_x1, block_y,
+                block_x2, block_y + cell_height,
+                fill=color, outline="black",
+                tags="gantt"
+            )
+            
+            # Draw process label
+            self.state_canvas.create_text(
+                (block_x1 + block_x2)/2, block_y + cell_height/2,
+                text=f"P{pid}", tags="gantt"
+            )
+
     def draw_state_transitions(self):
         """Draw process state transitions diagram"""
         x = 400
@@ -338,18 +343,19 @@ Statistics:
         
         table.grid(row=1, column=0, sticky=(tk.W, tk.E))
     
-    def animate_execution(self, gantt_chart):
-        """Enhanced animation with performance metrics"""
+    def animate_execution(self, gantt_data):
+        """Animated execution with timing data"""
         self.is_running = True
         self.current_time = 0
-        last_pid = None
+        self.current_gantt_data = gantt_data
+        gantt_chart, time_chart = gantt_data
         
         def update_animation():
-            nonlocal last_pid
-            for pid in gantt_chart:
+            last_pid = None
+            for pid, (start, end) in zip(gantt_chart, time_chart):
                 if self.paused and not self.step_mode:
                     continue
-                    
+                
                 if not self.is_running:
                     break
                 
@@ -358,19 +364,20 @@ Statistics:
                     self.context_switches += 1
                 last_pid = pid
                 
-                # Update process states and metrics
-                self.update_process_states(pid)
-                self.update_performance_metrics()
-                
-                self.current_time += 1
-                self.draw_enhanced_visualization()
-                
-                if not self.step_mode:
-                    time.sleep(self.animation_speed)
-                else:
-                    self.step_mode = False
-                    self.paused = True
-                
+                # Update for duration of execution
+                for t in range(start, end):
+                    self.current_time = t
+                    self.update_process_states(pid)
+                    self.update_performance_metrics()
+                    self.draw_enhanced_visualization()
+                    
+                    if not self.step_mode:
+                        time.sleep(self.animation_speed)
+                    else:
+                        self.step_mode = False
+                        self.paused = True
+                        break
+            
             self.finalize_simulation()
         
         Thread(target=update_animation, daemon=True).start()
