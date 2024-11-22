@@ -89,10 +89,10 @@ class SchedulerGUI:
         self.canvas.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Statistics panel
-        stats_frame = ttk.LabelFrame(main_frame, text="Statistics", padding="5")
-        stats_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=5)
+        self.stats_frame = ttk.LabelFrame(main_frame, text="Statistics", padding="5")
+        self.stats_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=5)
         
-        self.stats_text = tk.Text(stats_frame, height=5, width=70)
+        self.stats_text = tk.Text(self.stats_frame, height=5, width=70)
         self.stats_text.grid(row=0, column=0, sticky=(tk.W, tk.E))
         
         # Add timeline control panel
@@ -321,6 +321,11 @@ Statistics:
     
     def update_process_table(self):
         """Update process information in tabulated format"""
+        # Clear any existing table
+        for widget in self.stats_frame.winfo_children():
+            if isinstance(widget, ttk.Treeview):
+                widget.destroy()
+                
         headers = ["PID", "Arrival", "Burst", "Priority", "Waiting", "Turnaround", "State"]
         table = ttk.Treeview(self.stats_frame, columns=headers, show="headings", height=5)
         
