@@ -584,19 +584,22 @@ Statistics:
         
         # Run selected algorithm
         algo = self.algo_var.get()
-        if (algo == "rr"):
-            gantt_chart = self.scheduler.round_robin()
-        elif (algo == "sjf"):
-            gantt_chart = self.scheduler.sjf_nonpreemptive()
-        elif (algo == "sjf_p"):
-            gantt_chart = self.scheduler.sjf_preemptive()
-        elif (algo == "priority"):
-            gantt_chart = self.scheduler.priority_scheduling(False)
-        else:
-            gantt_chart = self.scheduler.priority_scheduling(True)
-            
-        self.animate_execution(gantt_chart)
-        self.update_statistics()
+        try:
+            if (algo == "rr"):
+                gantt_data = self.scheduler.round_robin()
+            elif (algo == "sjf"):
+                gantt_data = self.scheduler.sjf_nonpreemptive()
+            elif (algo == "sjf_p"):
+                gantt_data = self.scheduler.sjf_preemptive()
+            elif (algo == "priority"):
+                gantt_data = self.scheduler.priority_scheduling(False)
+            else:
+                gantt_data = self.scheduler.priority_scheduling(True)
+                
+            self.animate_execution(gantt_data)
+            self.update_statistics()
+        except Exception as e:
+            messagebox.showerror("Error", f"Simulation error: {str(e)}")
     
     def update_statistics(self):
         self.stats_text.delete(1.0, tk.END)

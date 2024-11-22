@@ -139,36 +139,49 @@ class CPUScheduler:
         return gantt_chart, time_chart
 
     def sjf_preemptive(self):
-        """Preemptive Shortest Job First scheduling.
-        Ties are broken by giving preference to the process with lower PID."""
+        """Preemptive Shortest Job First scheduling with timing data"""
         time = 0
-        completed_processes = 0
+        completed = 0
         gantt_chart = []
+        time_chart = []
+        last_switch = None
+        current_pid = None
         
-        while completed_processes < len(self.processes):
-            ready_processes = [p for p in self.processes if p.arrival_time <= time and p.remaining_time > 0]
-            if not ready_processes:
+        while completed < len(self.processes):
+            ready = [p for p in self.processes 
+                    if p.arrival_time <= time and p.remaining_time > 0]
+            if not ready:
                 time += 1
                 continue
 
             # Break ties using process ID
-            current_process = min(ready_processes, key=lambda p: (p.remaining_time, p.pid))
-            current_process.state = "running"
-            if current_process.response_time == -1:
-                current_process.response_time = time - current_process.arrival_time
+            current = min(ready, key=lambda p: (p.remaining_time, p.pid))
+            
+            # Record process switch
+            if current.pid != current_pid:
+                if current_pid is not None:
+                    time_chart.append((last_switch, time))
+                gantt_chart.append(current.pid)
+                last_switch = time
+                current_pid = current.pid
 
-            gantt_chart.append(current_process.pid)
+            current.state = "running"
+            if current.response_time == -1:
+                current.response_time = time - current.arrival_time
+
             time += 1
-            current_process.remaining_time -= 1
+            current.remaining_time -= 1
 
-            if current_process.remaining_time == 0:
-                current_process.completion_time = time
-                current_process.turnaround_time = time - current_process.arrival_time
-                current_process.waiting_time = current_process.turnaround_time - current_process.burst_time
-                current_process.state = "completed"
-                completed_processes += 1
+            if current.remaining_time == 0:
+                time_chart.append((last_switch, time))
+                current.completion_time = time
+                current.turnaround_time = time - current.arrival_time
+                current.waiting_time = current.turnaround_time - current.burst_time
+                current.state = "completed"
+                completed += 1
+                current_pid = None
 
-        return gantt_chart
+        return gantt_chart, time_chart
 
     def priority_scheduling(self, preemptive=False):
         """Priority scheduling with improved timing"""
