@@ -243,7 +243,7 @@ Statistics:
         """Enhanced Gantt chart with accurate timings"""
         self.state_canvas.delete("gantt")
         x = 50
-        y = 40
+        y = 6  # Moved up from 60
         cell_width = 40
         cell_height = 30
         
@@ -475,7 +475,7 @@ Statistics:
         meter_width = 400
         meter_height = 30
         x = 100
-        y = 120
+        y = self.state_canvas.winfo_height() - 40  # Place at bottom of canvas
         
         # Background bar
         self.state_canvas.create_rectangle(x, y, x + meter_width, y + meter_height,
